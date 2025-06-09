@@ -74,7 +74,7 @@
 	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
 	
 	<!-- Favicon -->
-	<link rel="icon" type="image/png" href="/favicon.png" />
+	<link rel="icon" type="image/png" href="/favicon.ico" />
 	
 	<!-- Theme color for mobile browsers -->
 	<meta name="theme-color" content="#0A0A0A" />
