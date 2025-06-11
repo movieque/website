@@ -13,7 +13,7 @@ interface EmailRequest {
 
 // CORS configuration
 const CORS_HEADERS = {
-    'Access-Control-Allow-Origin': 'http://localhost:5173', // 'https://movieque.com' for production
+    'Access-Control-Allow-Origin': 'https://movieque.com',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type',
     'Access-Control-Allow-Credentials': 'true',
