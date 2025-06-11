@@ -1,0 +1,4 @@
+CREATE TABLE leads (
+  email TEXT PRIMARY KEY NOT NULL,
+  timestamp TEXT NOT NULL
+);

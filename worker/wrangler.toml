@@ -1,0 +1,12 @@
+name = "leads-worker"
+compatibility_date = "2024-06-10"
+main = "./subscribe.ts"
+route = { pattern = "leads.movieque.com", custom_domain = true }
+
+[observability.logs]
+enabled = true
+
+[[d1_databases]]
+binding = "DB" # This is the name you'll use to access the D1 database in your worker code (e.g., env.DB)
+database_name = "movieque" # The name of your D1 database
+database_id = "34a612dd-1b19-4259-b98a-6de75004a22d" # Replace with your D1 database ID

@@ -9,7 +9,16 @@
 	let email = $state('');
 	let isSubmitting = $state(false);
 	let isSubmitted = $state(false);
+	let hasCheckedStorage = $state(false);
 	let errorMessage = $state('');
+	let existingEmail = $state('');
+	let submissionTimestamp = $state('');
+	let isEditing = $state(false);
+
+	interface EmailData {
+		email: string;
+		timestamp: string;
+	}
 
 	onMount(() => {
 		if (sectionRef) {
@@ -17,7 +26,67 @@
 				isVisible = visible;
 			});
 		}
+		
+		// Check for existing submission in localStorage
+		checkExistingSubmission();
 	});
+
+	function checkExistingSubmission() {
+		try {
+			const storedData = localStorage.getItem('movieque_email_data');
+			
+			if (storedData) {
+				const emailData: EmailData = JSON.parse(storedData);
+				
+				if (emailData.email && emailData.timestamp) {
+					existingEmail = emailData.email;
+					submissionTimestamp = emailData.timestamp;
+					isSubmitted = true;
+				}
+			}
+		} catch (error) {
+			console.error('Error reading stored email data:', error);
+			// If storage is corrupted, treat as new user
+			localStorage.removeItem('movieque_email_data');
+		}
+		
+		hasCheckedStorage = true;
+	}
+
+	function saveEmailData(emailData: EmailData) {
+		try {
+			localStorage.setItem('movieque_email_data', JSON.stringify(emailData));
+		} catch (error) {
+			console.error('Error saving email data:', error);
+		}
+	}
+
+	function formatTimestamp(timestamp: string): string {
+		try {
+			const date = new Date(timestamp);
+			return date.toLocaleString('en-US', {
+				year: 'numeric',
+				month: 'long',
+				day: 'numeric',
+				hour: '2-digit',
+				minute: '2-digit'
+			});
+		} catch (error) {
+			return 'Recently';
+		}
+	}
+
+	function startEditing() {
+		isEditing = true;
+		email = existingEmail;
+		isSubmitted = false;
+	}
+
+	function cancelEditing() {
+		isEditing = false;
+		email = '';
+		isSubmitted = true;
+	}
 
 	async function handleSubmit() {
 		if (!email || isSubmitting) return;
@@ -33,14 +102,35 @@
 		errorMessage = '';
 
 		try {
-			// Simulate API call
-			await new Promise(resolve => setTimeout(resolve, 1500));
+			const response = await fetch('https://leads.movieque.com', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+				},
+				body: JSON.stringify({ email })
+			});
+
+			if (!response.ok) {
+				const errorText = await response.text();
+				throw new Error(errorText || 'Failed to submit email');
+			}
+
+			// Get the email data from response (backend returns the data directly)
+			const emailData: EmailData = await response.json();
 			
-			// For demo purposes, we'll just show success
+			// Save to localStorage
+			saveEmailData(emailData);
+			
+			// Update component state with the exact data from backend
+			existingEmail = emailData.email;
+			submissionTimestamp = emailData.timestamp;
 			isSubmitted = true;
+			isEditing = false;
 			email = '';
+			
 		} catch (error) {
-			errorMessage = 'Something went wrong. Please try again.';
+			console.error('Submission error:', error);
+			errorMessage = error instanceof Error ? error.message : 'Something went wrong. Please try again.';
 		} finally {
 			isSubmitting = false;
 		}
@@ -65,7 +155,17 @@
 	</div>
 
 	<div class="relative z-10 max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-		{#if !isSubmitted}
+		{#if !hasCheckedStorage}
+			<!-- Loading state while checking storage -->
+			<div class="transition-all duration-600 ease-out opacity-50">
+				<div class="animate-pulse">
+					<div class="h-16 bg-gray-700 rounded mb-6 mx-auto max-w-2xl"></div>
+					<div class="h-8 bg-gray-700 rounded mb-12 mx-auto max-w-3xl"></div>
+					<div class="h-12 bg-gray-700 rounded mx-auto max-w-md"></div>
+				</div>
+			</div>
+		{:else if !isSubmitted && !isEditing}
+			<!-- New user - show signup form -->
 			<!-- Main CTA Content -->
 			<div class="transition-all duration-600 ease-out" 
 				 class:opacity-0={!isVisible} 
@@ -106,25 +206,27 @@
 							<p class="text-red-400 text-sm">{errorMessage}</p>
 						{/if}
 						
-						<Button
-							variant="primary"
-							size="lg"
-							onclick={handleSubmit}
-							loading={isSubmitting}
-							disabled={!email || isSubmitting}
-							class="w-full gradient-animation"
-						>
-							{#snippet children()}
-								{#if isSubmitting}
-									Joining Beta...
-								{:else}
-									Join the Beta
-								{/if}
-								<svg class="ml-2 w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"></path>
-								</svg>
-							{/snippet}
-						</Button>
+						<div class="flex space-x-3">
+							<Button
+								variant="primary"
+								size="lg"
+								onclick={handleSubmit}
+								loading={isSubmitting}
+								disabled={!email || isSubmitting}
+								class="flex-1 gradient-animation"
+							>
+								{#snippet children()}
+									{#if isSubmitting}
+										Joining Beta...
+									{:else}
+										Join the Beta
+									{/if}
+									<svg class="ml-2 w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"></path>
+									</svg>
+								{/snippet}
+							</Button>
+						</div>
 					</div>
 
 					<p class="text-gray-400 text-sm mt-4">
@@ -191,25 +293,155 @@
 					</div>
 				</div>
 			</div>
-		{:else}
-			<!-- Success State -->
+		{:else if isSubmitted && !isEditing}
+			<!-- Existing user - show current status with option to change -->
 			<div class="transition-all duration-600 ease-out" 
 				 class:opacity-0={!isVisible} 
 				 class:opacity-100={isVisible}
 				 class:translate-y-8={!isVisible}
 				 class:translate-y-0={isVisible}>
-				<div class="max-w-md mx-auto">
-					<div class="w-20 h-20 bg-gradient-to-r from-green-400 to-blue-500 rounded-full flex items-center justify-center mx-auto mb-6">
-						<svg class="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-						</svg>
+				<div class="max-w-lg mx-auto">
+					<!-- Current Status Card -->
+					<div class="bg-gray-900/50 backdrop-blur-sm border border-gray-700/50 rounded-2xl p-8 mb-8">
+						<div class="w-16 h-16 bg-gradient-to-r from-green-400 to-blue-500 rounded-full flex items-center justify-center mx-auto mb-6">
+							<svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+							</svg>
+						</div>
+						
+						<h3 class="text-2xl font-bold text-white mb-4">You're on the list!</h3>
+						<p class="text-gray-300 mb-6">
+							We'll notify you as soon as MovieQue beta spots open up.
+						</p>
+						
+						<!-- Email Details -->
+						<div class="bg-gray-800/50 border border-gray-600/30 rounded-xl p-4 mb-6">
+							<div class="text-sm text-gray-400 mb-1">Early Access Email:</div>
+							<div class="text-white font-medium text-lg mb-2">{existingEmail}</div>
+							<div class="text-xs text-gray-500">
+								Registered {formatTimestamp(submissionTimestamp)}
+							</div>
+						</div>
+						
+						<!-- Change Email Button -->
+						<Button
+							variant="secondary"
+							size="lg"
+							onclick={startEditing}
+							class="w-full"
+						>
+							{#snippet children()}
+								<svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+								</svg>
+								Change Email Address
+							{/snippet}
+						</Button>
 					</div>
-					<h3 class="text-3xl font-bold text-white mb-4">Welcome to MovieQue!</h3>
-					<p class="text-gray-300 mb-6">
-						You're all set! We'll send you an invite as soon as beta spots open up.
-					</p>
-					<p class="text-sm text-gray-400">
-						Keep an eye on your inbox for exclusive updates and early access.
+					
+					<!-- Additional Info -->
+					<div class="text-center">
+						<p class="text-gray-400 text-sm mb-4">
+							Keep an eye on your inbox for exclusive updates and early access invites.
+						</p>
+						
+						<!-- Mini Features -->
+						<div class="flex items-center justify-center space-x-6 text-sm">
+							<div class="flex items-center space-x-2 text-gray-300">
+								<svg class="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+								</svg>
+								<span>Priority Access</span>
+							</div>
+							<div class="flex items-center space-x-2 text-gray-300">
+								<svg class="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+								</svg>
+								<span>Exclusive Updates</span>
+							</div>
+						</div>
+					</div>
+				</div>
+			</div>
+		{:else if isEditing}
+			<!-- Edit mode - show update form -->
+			<div class="transition-all duration-600 ease-out" 
+				 class:opacity-0={!isVisible} 
+				 class:opacity-100={isVisible}
+				 class:translate-y-8={!isVisible}
+				 class:translate-y-0={isVisible}>
+				<h2 class="text-4xl sm:text-5xl lg:text-6xl font-bold text-white mb-6">
+					Update Your
+					<span class="bg-gradient-to-r from-red-500 to-blue-500 bg-clip-text text-transparent">
+						Early Access
+					</span>
+				</h2>
+				<p class="text-xl sm:text-2xl text-gray-300 mb-12 max-w-3xl mx-auto">
+					Change your email address for MovieQue beta notifications
+				</p>
+			</div>
+
+			<!-- Update Form -->
+			<div class="max-w-md mx-auto mb-12 transition-all duration-600 ease-out" 
+				 class:opacity-0={!isVisible} 
+				 class:opacity-100={isVisible}
+				 class:translate-y-8={!isVisible}
+				 class:translate-y-0={isVisible}
+				 style="transition-delay: 200ms;">
+				<div class="bg-gray-900/50 backdrop-blur-sm border border-gray-700/50 rounded-2xl p-8">
+					<h3 class="text-2xl font-bold text-white mb-2">Update Email Address</h3>
+					<p class="text-gray-400 text-sm mb-6">Currently registered: {existingEmail}</p>
+					
+					<div class="space-y-4">
+						<Input
+							type="email"
+							placeholder="Enter your new email address"
+							bind:value={email}
+							onkeypress={handleKeyPress}
+							class="text-center"
+						/>
+						
+						{#if errorMessage}
+							<p class="text-red-400 text-sm">{errorMessage}</p>
+						{/if}
+						
+						<div class="flex space-x-3">
+							<Button
+								variant="primary"
+								size="lg"
+								onclick={handleSubmit}
+								loading={isSubmitting}
+								disabled={!email || isSubmitting}
+								class="flex-1 gradient-animation"
+							>
+								{#snippet children()}
+									{#if isSubmitting}
+										Updating...
+									{:else}
+										Update Email
+									{/if}
+									<svg class="ml-2 w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+									</svg>
+								{/snippet}
+							</Button>
+							
+							<Button
+								variant="secondary"
+								size="lg"
+								onclick={cancelEditing}
+								disabled={isSubmitting}
+								class="px-6"
+							>
+								{#snippet children()}
+									Cancel
+								{/snippet}
+							</Button>
+						</div>
+					</div>
+
+					<p class="text-gray-400 text-sm mt-4">
+						No spam, ever. Unsubscribe anytime.
 					</p>
 				</div>
 			</div>
