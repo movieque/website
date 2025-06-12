@@ -4,7 +4,7 @@ main = "./subscribe.ts"
 route = { pattern = "leads.movieque.com", custom_domain = true }
 
 [observability.logs]
-enabled = true
+enabled = false
 
 [[d1_databases]]
 binding = "DB" # This is the name you'll use to access the D1 database in your worker code (e.g., env.DB)
